@@ -4,15 +4,16 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv2D, MaxPooling2D
 from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow import keras
 
 def crear_modelo(altura=50, anchura=50, canales=3, clases=3,
                  kernels1=16, kernels2=32, kernel1_size=(3,3),
                  kernel2_size=(3,3), size_pooling=(3,3)):
-    modelo = Sequential()
-    # Primera capa convolucional
+    modelo = Sequential() 
+    # Primera capa convolucional 
     modelo.add(Conv2D(kernels1, kernel1_size, padding="same", activation="relu", 
                       input_shape=(altura, anchura, canales)))
-    modelo.add(MaxPooling2D(pool_size=size_pooling))
+    modelo.add(MaxPooling2D(pool_size=size_pooling)) 
     
     # Segunda capa convolucional
     modelo.add(Conv2D(kernels2, kernel2_size, padding="same", activation="relu"))
@@ -81,6 +82,6 @@ def entrenar_modelo(ruta_entrenamiento, ruta_validacion,
 
 if __name__ == '__main__':
     # Para pruebas rápidas desde la línea de comandos
-    ruta_entrenamiento = os.path.join("..", "datasets", "entrenamiento")
-    ruta_validacion = os.path.join("..", "datasets", "validacion")
+    ruta_entrenamiento = r"C:\Users\Debanni\Documentos\EP4_Sistemas\Datasets\entrenamiento"
+    ruta_validacion = r"C:\Users\Debanni\Documentos\EP4_Sistemas\Datasets\validacion"
     modelo, hist = entrenar_modelo(ruta_entrenamiento, ruta_validacion)

@@ -6,6 +6,7 @@ from PIL import Image, ImageTk, ImageDraw
 import cv2
 import numpy as np
 import threading
+from tensorflow import keras
 
 # Importar la función de entrenamiento y carga del modelo
 from Modelo import CnnModelo  # Asegúrate de que CnnModelo tenga la función entrenar_modelo()
@@ -63,7 +64,10 @@ def subir_imagen():
     if ruta:
         ruta_imagen_subida = ruta
         cargar_imagen(lbl_imagen, ruta)
-        actualizar_info_nutricional()  # Actualiza info en base al producto seleccionado
+        
+        producto_detectado = predecir_producto(ruta)
+        combo_producto.set(producto_detectado)  # Auto-selecciona en el combobox
+        actualizar_info_nutricional()
 
 def tomar_foto():
     global ruta_imagen_subida
@@ -82,7 +86,6 @@ def tomar_foto():
         cv2.imshow("Presione 's' para capturar, 'q' para salir", frame)
         key = cv2.waitKey(1) & 0xFF
         if key == ord("s"):
-            # Guardar imagen temporalmente
             ruta_temp = os.path.join(os.getcwd(), "temp_captura.jpg")
             cv2.imwrite(ruta_temp, frame)
             ruta_imagen_subida = ruta_temp
@@ -92,7 +95,11 @@ def tomar_foto():
             break
     cap.release()
     cv2.destroyAllWindows()
+
+    producto_detectado = predecir_producto(ruta_imagen_subida)
+    combo_producto.set(producto_detectado)
     actualizar_info_nutricional()
+
 
 def entrenar():
     global modelo_global
@@ -105,6 +112,37 @@ def entrenar():
         modelo_global = modelo
         mensaje.config(text="✅ Entrenamiento completado!", image="", foreground="white")
     threading.Thread(target=run_entrenamiento).start()
+    
+def predecir_producto(ruta_imagen):
+    global modelo_global
+    if modelo_global is None:
+        messagebox.showwarning("Modelo no entrenado", "Por favor, entrena el modelo primero.")
+        return "Otra"
+
+    # Procesar imagen como fue entrenada
+    img = keras.utils.load_img(ruta_imagen, target_size=(150, 150))
+    img_array = keras.utils.img_to_array(img)
+    img_array = np.expand_dims(img_array, axis=0) / 255.0
+
+    # Hacer predicción
+    prediccion = modelo_global.predict(img_array)
+    clase_predicha = np.argmax(prediccion)
+
+    # Mapea el índice a etiqueta (ajusta esto con tus etiquetas reales)
+    etiquetas = ["CocaCola", "Boing", "Otra"]  # Asegúrate que este orden coincida con el del entrenamiento
+    return etiquetas[clase_predicha]
+
+def analizar_producto():
+    if not ruta_imagen_subida:
+        messagebox.showwarning("Imagen no cargada", "Por favor, sube una imagen o toma una foto primero.")
+        return
+
+    producto_detectado = predecir_producto(ruta_imagen_subida)
+    combo_producto.set(producto_detectado)
+    actualizar_info_nutricional()
+    messagebox.showinfo("Análisis completado", f"Producto detectado: {producto_detectado}")
+
+
 
 def actualizar_info_nutricional(*args):
     # Obtener el producto seleccionado desde el combobox
@@ -152,6 +190,9 @@ lbl_imagen.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 # Panel derecho: Controles y selección de producto
 control_frame = ttk.Frame(main_frame, style="TLabel")
 control_frame.place(x=450, y=20, width=480, height=150)
+# Botón "Analizar Producto"
+
+
 
 # Botón "Subir Imagen"
 btn_subir = ttk.Button(control_frame, text="🖼️ Subir Imagen", command=subir_imagen)
@@ -163,7 +204,10 @@ btn_tomar.grid(row=0, column=1, padx=20, pady=10, ipadx=10, ipady=5)
 
 # Botón "Entrenar Modelo" (solo actualiza el entrenamiento sin que el usuario suba fotos)
 btn_entrenar = ttk.Button(control_frame, text="⚙️ Entrenar Modelo", command=entrenar)
-btn_entrenar.grid(row=1, column=0, columnspan=2, padx=20, pady=10, ipadx=10, ipady=5)
+btn_entrenar.grid(row=1, column=0, columnspan=2, padx=10, pady=10, ipadx=10, ipady=5)
+
+btn_analizar = ttk.Button(control_frame, text="⚙️Analizar", command=analizar_producto)
+btn_analizar.grid(row=1, column=1, columnspan=2, padx=10, pady=10, ipadx=10, ipady=5)
 
 # Desplegable para seleccionar el tipo de producto
 ttk.Label(control_frame, text="Selecciona Tipo de Producto:", font=("Segoe UI", 10, "bold")).grid(row=2, column=0, padx=20, pady=5, sticky=tk.W)

@@ -4,3 +4,13 @@ opencv-python
 Pillow
 numpy
 matplotlib
+
+ 
+ usar estos comandos para insalar
+
+pip install tensorflow==2.11.0
+pip install keras==2.11.0
+pip install opencv-python
+pip install Pillow
+pip install numpy
+pip install matplotlib
