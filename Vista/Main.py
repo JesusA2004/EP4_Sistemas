@@ -105,8 +105,8 @@ def entrenar():
     global modelo_global
     mensaje.config(text="Entrenando modelo...", foreground="white", image=gradiente_msg, compound=tk.CENTER)
     def run_entrenamiento():
-        ruta_entrenamiento = os.path.join("..", "datasets", "entrenamiento")
-        ruta_validacion = os.path.join("..", "datasets", "validacion")
+        ruta_entrenamiento = os.path.join("..", "Datasets", "entrenamiento")
+        ruta_validacion = os.path.join("..", "Datasets", "validacion")
         modelo, hist = CnnModelo.entrenar_modelo(ruta_entrenamiento, ruta_validacion, epocas=10)
         global modelo_global
         modelo_global = modelo
@@ -157,7 +157,7 @@ ventana.geometry("1000x700")
 ventana.configure(bg="#2c3e50")
 ventana.resizable(False, False)
 
-# Configurar estilos con ttk para una apariencia moderna
+
 style = ttk.Style(ventana)
 style.theme_use("clam")
 style.configure("TButton", font=("Segoe UI", 10, "bold"), borderwidth=0, relief="flat")
