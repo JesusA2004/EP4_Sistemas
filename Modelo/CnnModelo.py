@@ -5,6 +5,8 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv2D, MaxPooling2D
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow import keras
+import scipy
+
 
 def crear_modelo(altura=50, anchura=50, canales=3, clases=3,
                  kernels1=16, kernels2=32, kernel1_size=(3,3),
@@ -82,6 +84,6 @@ def entrenar_modelo(ruta_entrenamiento, ruta_validacion,
 
 if __name__ == '__main__':
     # Para pruebas rápidas desde la línea de comandos
-    ruta_entrenamiento = r"C:\Users\Debanni\Documentos\EP4_Sistemas\Datasets\entrenamiento"
-    ruta_validacion = r"C:\Users\Debanni\Documentos\EP4_Sistemas\Datasets\validacion"
+    ruta_entrenamiento = r"C:\xampp\htdocs\EP4_Sistemas\Datasets\entrenamiento"
+    ruta_validacion = r"C:\xampp\htdocs\EP4_Sistemas\Datasets\validacion"
     modelo, hist = entrenar_modelo(ruta_entrenamiento, ruta_validacion)

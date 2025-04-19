@@ -7,6 +7,10 @@ import cv2
 import numpy as np
 import threading
 from tensorflow import keras
+from tensorflow.keras.preprocessing import image
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Importar la función de entrenamiento y carga del modelo
 from Modelo import CnnModelo  # Asegúrate de que CnnModelo tenga la función entrenar_modelo()
@@ -65,9 +69,9 @@ def subir_imagen():
         ruta_imagen_subida = ruta
         cargar_imagen(lbl_imagen, ruta)
         
-        producto_detectado = predecir_producto(ruta)
-        combo_producto.set(producto_detectado)  # Auto-selecciona en el combobox
+        # Se ha eliminado la predicción y la actualización del combobox
         actualizar_info_nutricional()
+
 
 def tomar_foto():
     global ruta_imagen_subida
@@ -105,43 +109,42 @@ def entrenar():
     global modelo_global
     mensaje.config(text="Entrenando modelo...", foreground="white", image=gradiente_msg, compound=tk.CENTER)
     def run_entrenamiento():
-        ruta_entrenamiento = os.path.join("..", "Datasets", "entrenamiento")
-        ruta_validacion = os.path.join("..", "Datasets", "validacion")
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        ruta_entrenamiento = os.path.abspath(os.path.join(BASE_DIR, "..", "Datasets", "entrenamiento"))
+        ruta_validacion = os.path.abspath(os.path.join(BASE_DIR, "..", "Datasets", "validacion"))
         modelo, hist = CnnModelo.entrenar_modelo(ruta_entrenamiento, ruta_validacion, epocas=10)
         global modelo_global
         modelo_global = modelo
         mensaje.config(text="✅ Entrenamiento completado!", image="", foreground="white")
     threading.Thread(target=run_entrenamiento).start()
     
-def predecir_producto(ruta_imagen):
-    global modelo_global
-    if modelo_global is None:
-        messagebox.showwarning("Modelo no entrenado", "Por favor, entrena el modelo primero.")
-        return "Otra"
-
-    # Procesar imagen como fue entrenada
-    img = keras.utils.load_img(ruta_imagen, target_size=(150, 150))
-    img_array = keras.utils.img_to_array(img)
-    img_array = np.expand_dims(img_array, axis=0) / 255.0
-
-    # Hacer predicción
-    prediccion = modelo_global.predict(img_array)
-    clase_predicha = np.argmax(prediccion)
-
-    # Mapea el índice a etiqueta (ajusta esto con tus etiquetas reales)
-    etiquetas = ["CocaCola", "Boing", "Otra"]  # Asegúrate que este orden coincida con el del entrenamiento
-    return etiquetas[clase_predicha]
 
 def analizar_producto():
     if not ruta_imagen_subida:
         messagebox.showwarning("Imagen no cargada", "Por favor, sube una imagen o toma una foto primero.")
         return
 
-    producto_detectado = predecir_producto(ruta_imagen_subida)
+    # Preprocesar la imagen
+    img = image.load_img(ruta_imagen_subida, target_size=(50, 50))
+    img_array = image.img_to_array(img)
+    img_array = np.expand_dims(img_array, axis=0)
+    img_array = img_array / 255.0
+
+    # Predecir
+    prediccion = modelo_global.predict(img_array)
+    clase_predicha = np.argmax(prediccion, axis=1)[0]
+
+    # Mapeo manual de clases
+    if clase_predicha == 0:
+        producto_detectado = "Boing"
+    elif clase_predicha == 1:
+        producto_detectado = "CocaCola"
+    else:
+        producto_detectado = "Otra"
+
     combo_producto.set(producto_detectado)
     actualizar_info_nutricional()
     messagebox.showinfo("Análisis completado", f"Producto detectado: {producto_detectado}")
-
 
 
 def actualizar_info_nutricional(*args):
