@@ -1,77 +1,67 @@
-# gui/main.py
 import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageTk, ImageDraw
 import cv2
-import numpy as np
 import threading
-from tensorflow import keras
-from tensorflow.keras.preprocessing import image
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-# Importar la función de entrenamiento y carga del modelo
-from Modelo import CnnModelo  # Asegúrate de que CnnModelo tenga la función entrenar_modelo()
+from Modelo.CnnModelo import entrenar_modelo, predecir_producto
 
-# Variables globales
-modelo_global = None
+# — Constantes de ruta —
+BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
+CLASES_DIR  = os.path.abspath(os.path.join(BASE_DIR, "..", "Clases"))
+
+# — Variables globales —
+modelo_global      = None
 ruta_imagen_subida = ""
-imagen_actual = None
 
-# Diccionario con datos nutricionales de ejemplo
+# — Info nutricional corregida —
 info_nutricional = {
-    "CocaCola": "Información nutricional de CocaCola:\n- Calorías: 140 kcal\n- Azúcares: 39 g\n- Sodio: 45 mg",
-    "Boing": "Información nutricional de Boing:\n- Calorías: 110 kcal\n- Vitaminas: A, C\n- Fibra: 3 g",
-    "Otra": "Información nutricional del producto:\n- Datos no disponibles.\n- Consulte la etiqueta."
+    "CocaCola":         "Calorías: 140 kcal\nAzúcares: 39 g\nSodio: 45 mg",
+    "Boing":            "Calorías: 110 kcal\nVitaminas: A, C\nFibra: 3 g",
+    "JarritoTamarindo": "Calorías: 120 kcal\nAzúcares: 30 g\nSodio: 40 mg\nSabor: Tamarindo"
 }
 
-def crear_gradiente(width, height, color1, color2):
-    gradient = Image.new('RGB', (width, height), color1)
-    draw = ImageDraw.Draw(gradient)
-    for y in range(height):
-        r = int(color1[0] + (color2[0] - color1[0]) * y / height)
-        g = int(color1[1] + (color2[1] - color1[1]) * y / height)
-        b = int(color1[2] + (color2[2] - color1[2]) * y / height)
-        draw.line((0, y, width, y), fill=(r, g, b))
-    return ImageTk.PhotoImage(gradient)
+# — PNGs de cada clase en Clases/ —
+default_product_images = {
+    "CocaCola":         os.path.join(CLASES_DIR, "coca.png"),
+    "Boing":            os.path.join(CLASES_DIR, "boing.png"),
+    "JarritoTamarindo": os.path.join(CLASES_DIR, "jarritoTamarindo.png")
+}
+
+def crear_gradiente(w, h, c1, c2):
+    grad = Image.new("RGB", (w, h), c1)
+    draw = ImageDraw.Draw(grad)
+    for y in range(h):
+        r = int(c1[0] + (c2[0] - c1[0]) * y / h)
+        g = int(c1[1] + (c2[1] - c1[1]) * y / h)
+        b = int(c1[2] + (c2[2] - c1[2]) * y / h)
+        draw.line((0, y, w, y), fill=(r, g, b))
+    return ImageTk.PhotoImage(grad)
 
 def cargar_imagen(label, path, max_size=(300, 300)):
-    global imagen_actual
-    img_cv = cv2.imread(path)
-    if img_cv is None:
+    img = cv2.imread(path)
+    if img is None:
         messagebox.showerror("Error", "No se pudo abrir la imagen.")
         return
-    img_cv = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
-    img_pil = Image.fromarray(img_cv)
-    img_pil.thumbnail(max_size)
-
-    # Agregar borde decorativo
-    border_size = 3
-    img_with_border = Image.new("RGB", 
-                                (img_pil.width + border_size*2, img_pil.height + border_size*2),
-                                (41, 128, 185))
-    img_with_border.paste(img_pil, (border_size, border_size))
-    
-    img_tk = ImageTk.PhotoImage(img_with_border)
-    label.config(image=img_tk)
-    label.image = img_tk  # Conservar referencia
-    imagen_actual = img_with_border  # Guardar la imagen actual (opcional)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    pil = Image.fromarray(img)
+    pil.thumbnail(max_size)
+    b = 4
+    bord = Image.new("RGB", (pil.width + 2*b, pil.height + 2*b), (41, 128, 185))
+    bord.paste(pil, (b, b))
+    tkimg = ImageTk.PhotoImage(bord)
+    label.config(image=tkimg)
+    label.image = tkimg
 
 def subir_imagen():
     global ruta_imagen_subida
-    ruta = filedialog.askopenfilename(
-        title="Selecciona una imagen",
-        filetypes=[("Archivos de imagen", "*.jpg;*.jpeg;*.png")]
+    f = filedialog.askopenfilename(
+        title="Selecciona imagen", filetypes=[("Imágenes", "*.jpg;*.png")]
     )
-    if ruta:
-        ruta_imagen_subida = ruta
-        cargar_imagen(lbl_imagen, ruta)
-        
-        # Se ha eliminado la predicción y la actualización del combobox
-        actualizar_info_nutricional()
-
+    if f:
+        ruta_imagen_subida = f
+        cargar_imagen(lbl_upload, f)
 
 def tomar_foto():
     global ruta_imagen_subida
@@ -79,154 +69,175 @@ def tomar_foto():
     if not cap.isOpened():
         messagebox.showerror("Error", "No se pudo acceder a la cámara.")
         return
-
-    messagebox.showinfo("Tomar foto", "Presione la tecla 's' para capturar la imagen y 'q' para salir.")
-    
+    messagebox.showinfo("Instrucción", "Presiona 's' para capturar, 'q' para salir.")
     while True:
         ret, frame = cap.read()
-        if not ret:
-            messagebox.showerror("Error", "No se pudo capturar la imagen.")
+        if not ret: break
+        cv2.imshow("Captura", frame)
+        k = cv2.waitKey(1) & 0xFF
+        if k == ord('s'):
+            tmp = os.path.join(os.getcwd(), "temp.jpg")
+            cv2.imwrite(tmp, frame)
+            ruta_imagen_subida = tmp
+            cargar_imagen(lbl_upload, tmp)
             break
-        cv2.imshow("Presione 's' para capturar, 'q' para salir", frame)
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord("s"):
-            ruta_temp = os.path.join(os.getcwd(), "temp_captura.jpg")
-            cv2.imwrite(ruta_temp, frame)
-            ruta_imagen_subida = ruta_temp
-            cargar_imagen(lbl_imagen, ruta_temp)
-            break
-        elif key == ord("q"):
+        elif k == ord('q'):
             break
     cap.release()
     cv2.destroyAllWindows()
 
-    producto_detectado = predecir_producto(ruta_imagen_subida)
-    combo_producto.set(producto_detectado)
-    actualizar_info_nutricional()
-
-
 def entrenar():
     global modelo_global
-    mensaje.config(text="Entrenando modelo...", foreground="white", image=gradiente_msg, compound=tk.CENTER)
-    def run_entrenamiento():
-        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        ruta_entrenamiento = os.path.abspath(os.path.join(BASE_DIR, "..", "Datasets", "entrenamiento"))
-        ruta_validacion = os.path.abspath(os.path.join(BASE_DIR, "..", "Datasets", "validacion"))
-        modelo, hist = CnnModelo.entrenar_modelo(ruta_entrenamiento, ruta_validacion, epocas=10)
-        global modelo_global
-        modelo_global = modelo
-        mensaje.config(text="✅ Entrenamiento completado!", image="", foreground="white")
-    threading.Thread(target=run_entrenamiento).start()
-    
+    mensaje.config(text="", image=grad_msg, compound=tk.CENTER)
+    def job():
+        ent = os.path.join(BASE_DIR, "..", "Datasets", "entrenamiento")
+        val = os.path.join(BASE_DIR, "..", "Datasets", "validacion")
+        modelo, _ = entrenar_modelo(ent, val, epocas=10)
+        globals()['modelo_global'] = modelo
+        mensaje.config(text="✅ Entrenamiento completado", image="", foreground="white")
+    threading.Thread(target=job, daemon=True).start()
 
-def analizar_producto():
+def evaluar():
+    if modelo_global is None:
+        messagebox.showerror("Error", "Entrena primero.")
+        return
     if not ruta_imagen_subida:
-        messagebox.showwarning("Imagen no cargada", "Por favor, sube una imagen o toma una foto primero.")
+        messagebox.showerror("Error", "Sube o toma imagen primero.")
         return
 
-    # Preprocesar la imagen
-    img = image.load_img(ruta_imagen_subida, target_size=(50, 50))
-    img_array = image.img_to_array(img)
-    img_array = np.expand_dims(img_array, axis=0)
-    img_array = img_array / 255.0
+    pred = predecir_producto(ruta_imagen_subida, modelo_global)
 
-    # Predecir
-    prediccion = modelo_global.predict(img_array)
-    clase_predicha = np.argmax(prediccion, axis=1)[0]
-
-    # Mapeo manual de clases
-    if clase_predicha == 0:
-        producto_detectado = "Boing"
-    elif clase_predicha == 1:
-        producto_detectado = "CocaCola"
+    # Mensaje según predicción
+    if pred in info_nutricional:
+        messagebox.showinfo(
+            "⚠️ Producto detectado",
+            f"Bebida dañina para la salud.\n\nA continuación la info de: {pred}"
+        )
     else:
-        producto_detectado = "Otra"
+        messagebox.showwarning(
+            "❓ No identificado",
+            "Producto no identificado en nuestro catálogo de productos dañinos."
+        )
 
-    combo_producto.set(producto_detectado)
-    actualizar_info_nutricional()
-    messagebox.showinfo("Análisis completado", f"Producto detectado: {producto_detectado}")
+    # Mostrar imagen de resultado
+    ref = default_product_images.get(pred, "")
+    if os.path.exists(ref):
+        cargar_imagen(lbl_result_img, ref, max_size=(220, 220))
+    else:
+        lbl_result_img.config(image='')
+        lbl_result_img.image = None
 
+    # Mostrar texto de resultado
+    lbl_result_text.config(
+        text=f"{pred}\n\n{info_nutricional.get(pred, 'Sin información disponible.')}"
+    )
 
-def actualizar_info_nutricional(*args):
-    # Obtener el producto seleccionado desde el combobox
-    producto = combo_producto.get()
-    info = info_nutricional.get(producto, "Información no disponible.")
-    lbl_info.config(text=info)
+    # Efecto de resaltado del panel de resultado
+    original_bg = rf.cget("bg")
+    rf.config(bg="#16a085")
+    vent.after(200, lambda: rf.config(bg=original_bg))
 
-# Crear la ventana principal
-ventana = tk.Tk()
-ventana.title("Clasificador de Productos Saludables")
-ventana.geometry("1000x700")
-ventana.configure(bg="#2c3e50")
-ventana.resizable(False, False)
+    mensaje.config(text="✅ Imagen evaluada", image="", foreground="white")
 
+# — Construcción de la ventana —
+vent = tk.Tk()
+vent.title("NutriScan")
+vent.geometry("1000x700")
+vent.configure(bg="#2c3e50")
+vent.resizable(False, False)
 
-style = ttk.Style(ventana)
+# — Estilos ttk —
+style = ttk.Style(vent)
 style.theme_use("clam")
-style.configure("TButton", font=("Segoe UI", 10, "bold"), borderwidth=0, relief="flat")
+style.configure(
+    "TButton",
+    font=("Segoe UI", 11, "bold"),
+    relief="flat",
+    borderwidth=0,
+    padding=8
+)
 style.map("TButton",
-    foreground=[('active', 'white'), ('!active', 'white')],
-    background=[('active', '#3498db'), ('!active', '#2980b9')])
-style.configure("TLabel", font=("Segoe UI", 10), background="#2c3e50", foreground="white")
-style.configure("Header.TLabel", font=("Segoe UI", 20, "bold"), background="#2c3e50", foreground="white")
+    background=[("!active", "#2980b9"), ("active", "#3498db")],
+    foreground=[("!active", "white"), ("active", "white")]
+)
+style.configure("TLabel", background="#2c3e50", foreground="white", font=("Segoe UI", 10))
+style.configure("Header.TLabel", font=("Segoe UI", 22, "bold"), foreground="white")
 
-# Crear gradientes para cabecera, botones y mensajes
-gradient_header = crear_gradiente(1000, 80, (44, 62, 80), (52, 152, 219))
-gradient_btn = crear_gradiente(150, 40, (41, 128, 185), (52, 152, 219))
-gradiente_msg = crear_gradiente(800, 30, (46, 134, 193), (52, 152, 219))
+# — Gradientes —
+grad_head = crear_gradiente(1000, 80, (44, 62, 80), (52, 152, 219))
+grad_msg  = crear_gradiente(800, 30, (46, 134, 193), (52, 152, 219))
 
-# Cabecera
-header = ttk.Label(ventana, image=gradient_header)
-header.place(x=0, y=0, width=1000, height=80)
-ttk.Label(header, text="Comida Saludable", style="Header.TLabel").place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+# — Header —
+hdr = ttk.Label(vent, image=grad_head)
+hdr.place(x=0, y=0, width=1000, height=80)
+ttk.Label(
+    hdr,
+    text="NutriScan",
+    style="Header.TLabel"
+).place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
-# Frame principal para el contenido
-main_frame = ttk.Frame(ventana, style="TLabel")
-main_frame.place(x=20, y=100, width=960, height=500)
+# — Panel principal —
+main = tk.Frame(vent, bg="#2c3e50")
+main.place(x=20, y=100, width=960, height=500)
 
-# Panel izquierdo: Área de previsualización de imagen
-img_frame = ttk.Frame(main_frame, borderwidth=3, relief="ridge")
-img_frame.place(x=30, y=20, width=400, height=400)
-lbl_imagen = ttk.Label(img_frame, background="#34495e")
-lbl_imagen.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+# — Panel izquierda: Imagen subida —
+lf = tk.LabelFrame(
+    main,
+    text="Imagen subida",
+    bg="#34495e",
+    fg="white",
+    font=("Segoe UI", 12, "bold"),
+    bd=2,
+    relief="ridge",
+    labelanchor="n"
+)
+lf.place(x=20, y=20, width=420, height=460)
+lbl_upload = tk.Label(lf, bg="#34495e")
+lbl_upload.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
-# Panel derecho: Controles y selección de producto
-control_frame = ttk.Frame(main_frame, style="TLabel")
-control_frame.place(x=450, y=20, width=480, height=150)
-# Botón "Analizar Producto"
+# — Panel derecha: Resultado —
+rf = tk.LabelFrame(
+    main,
+    text="Resultado del análisis",
+    bg="#34495e",
+    fg="white",
+    font=("Segoe UI", 12, "bold"),
+    bd=2,
+    relief="ridge",
+    labelanchor="n"
+)
+rf.place(x=460, y=20, width=480, height=460)
 
+lbl_result_img = tk.Label(rf, bg="#34495e")
+lbl_result_img.place(relx=0.5, rely=0.25, anchor=tk.CENTER, width=220, height=220)
 
+lbl_result_text = tk.Label(
+    rf,
+    text="Aquí aparecerá el resultado",
+    bg="#34495e",
+    fg="white",
+    font=("Segoe UI", 12),
+    justify="center",
+    wraplength=420
+)
+lbl_result_text.place(relx=0.5, rely=0.75, anchor=tk.CENTER)
 
-# Botón "Subir Imagen"
-btn_subir = ttk.Button(control_frame, text="🖼️ Subir Imagen", command=subir_imagen)
-btn_subir.grid(row=0, column=0, padx=20, pady=10, ipadx=10, ipady=5)
+# — Botonera —
+botf = tk.Frame(vent, bg="#2c3e50")
+botf.place(x=20, y=620, width=960, height=60)
 
-# Botón "Tomar Foto"
-btn_tomar = ttk.Button(control_frame, text="📸 Tomar Foto", command=tomar_foto)
-btn_tomar.grid(row=0, column=1, padx=20, pady=10, ipadx=10, ipady=5)
+ttk.Button(botf, text="🖼️ Subir Imagen", command=subir_imagen).grid(row=0, column=0, padx=10)
+ttk.Button(botf, text="📸 Tomar Foto",    command=tomar_foto).grid(  row=0, column=1, padx=10)
+ttk.Button(botf, text="⚙️ Entrenar Modelo", command=entrenar).grid( row=0, column=2, padx=10)
+ttk.Button(botf, text="🔍 Evaluar Imagen",  command=evaluar).grid(  row=0, column=3, padx=10)
 
-# Botón "Entrenar Modelo" (solo actualiza el entrenamiento sin que el usuario suba fotos)
-btn_entrenar = ttk.Button(control_frame, text="⚙️ Entrenar Modelo", command=entrenar)
-btn_entrenar.grid(row=1, column=0, columnspan=2, padx=10, pady=10, ipadx=10, ipady=5)
+mensaje = tk.Label(
+    vent,
+    text="Sistema listo",
+    bg="#2c3e50",
+    fg="white",
+    font=("Segoe UI", 11)
+)
+mensaje.place(x=20, y=690, width=960, height=30)
 
-btn_analizar = ttk.Button(control_frame, text="⚙️Analizar", command=analizar_producto)
-btn_analizar.grid(row=1, column=1, columnspan=2, padx=10, pady=10, ipadx=10, ipady=5)
-
-# Desplegable para seleccionar el tipo de producto
-ttk.Label(control_frame, text="Selecciona Tipo de Producto:", font=("Segoe UI", 10, "bold")).grid(row=2, column=0, padx=20, pady=5, sticky=tk.W)
-combo_producto = ttk.Combobox(control_frame, values=["CocaCola", "Boing", "Otra"], state="readonly", font=("Segoe UI", 10))
-combo_producto.current(0)
-combo_producto.grid(row=2, column=1, padx=20, pady=5)
-combo_producto.bind("<<ComboboxSelected>>", actualizar_info_nutricional)
-
-# Panel inferior: Mostrar información del producto seleccionado (datos nutricionales, etc.)
-status_frame = ttk.Frame(main_frame, borderwidth=3, relief="ridge")
-status_frame.place(x=30, y=440, width=900, height=50)
-lbl_info = ttk.Label(status_frame, text="Información nutricional aquí", font=("Segoe UI", 11), background="#34495e", foreground="white", anchor="center")
-lbl_info.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
-
-# Mensaje de estado (ubicado sobre la ventana inferior)
-mensaje = ttk.Label(ventana, text="Sistema listo", font=("Segoe UI", 11), background="#2c3e50", foreground="white")
-mensaje.place(x=20, y=620, width=960, height=50)
-
-ventana.mainloop()
+vent.mainloop()
