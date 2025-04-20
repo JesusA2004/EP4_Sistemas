@@ -1,7 +1,10 @@
 import os
 import json
 import numpy as np
-from tensorflow.keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array
+from PIL import Image, UnidentifiedImageError
+from tensorflow.keras.preprocessing.image import (
+    ImageDataGenerator, load_img, img_to_array
+)
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Flatten, Dense, Dropout
 from tensorflow.keras.callbacks import ModelCheckpoint
@@ -14,6 +17,39 @@ os.makedirs(SAVE_DIR, exist_ok=True)
 MODEL_FILE    = os.path.join(SAVE_DIR, "cnn.h5")
 WEIGHTS_FILE  = os.path.join(SAVE_DIR, "cnn_pesos.weights.h5")
 INDICES_FILE  = os.path.join(SAVE_DIR, "class_indices.json")
+
+def _clean_and_convert_images(root_dir):
+    """
+    Recorre recursivamente root_dir:
+      • Verifica que cada archivo sea una imagen válida (PIL puede abrirla).
+      • Si no lo es, lo elimina.
+      • Si su extensión no es .jpg/.jpeg, lo convierte a JPEG real y borra el original.
+    """
+    for dirpath, _, filenames in os.walk(root_dir):
+        for fname in filenames:
+            full_path = os.path.join(dirpath, fname)
+            base, ext = os.path.splitext(full_path)
+            ext_lower = ext.lower()
+            try:
+                # Verificar que PIL pueda abrir y procesar la imagen
+                with Image.open(full_path) as im:
+                    im.verify()
+            except (UnidentifiedImageError, OSError):
+                print(f"[WARNING] Imagen inválida o corrupta, eliminando: {full_path}")
+                os.remove(full_path)
+                continue
+
+            # Si no es JPEG, reconvertir
+            if ext_lower not in ('.jpg', '.jpeg'):
+                try:
+                    with Image.open(full_path).convert('RGB') as im:
+                        new_path = base + '.jpg'
+                        im.save(new_path, 'JPEG')
+                    os.remove(full_path)
+                    print(f"Convertida: {full_path} → {new_path}")
+                except Exception as e:
+                    print(f"[WARNING] No se pudo convertir {full_path}: {e}")
+                    os.remove(full_path)
 
 def crear_modelo(altura=100, anchura=100, canales=3, clases=4):
     """
@@ -59,6 +95,10 @@ def entrenar_modelo(
     Configura generadores de datos con aumento, entrena la CNN,
     guarda el mejor modelo y sus pesos, y almacena el mapeo clase→índice.
     """
+    # Primero, limpiar y convertir todas las imágenes de ambos directorios
+    _clean_and_convert_images(ruta_train)
+    _clean_and_convert_images(ruta_val)
+
     # Aumento de datos para robustez frente a rotaciones, zooms y flips
     train_datagen = ImageDataGenerator(
         rescale=1/255., rotation_range=20,
